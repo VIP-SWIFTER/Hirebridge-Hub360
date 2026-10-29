@@ -1,7 +1,8 @@
 // Thin typed wrapper around the backend API.
 import type { Errors, FormKey, Status, Values } from "./formConfig";
 
-const API = import.meta.env.VITE_API_URL ?? "";
+// Backend address. Trailing slashes are removed so "https://x.onrender.com/" can never produce "//api/...".
+const API = String(import.meta.env.VITE_API_URL ?? "").trim().replace(/\/+$/, "");
 
 export interface SubmitResult {
   ok: boolean;
