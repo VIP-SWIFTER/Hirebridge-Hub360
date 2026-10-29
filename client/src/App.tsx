@@ -91,7 +91,7 @@ export default function App() {
           </>
         )}
       </main>
-      <div style={{ position: "relative", zIndex: 1 }}>
+      <div style={{ position: "relative", zIndex: 1, paddingBottom: "56px" }}>
         <Footer openForm={openForm} />
       </div>
       <FloatingActions />

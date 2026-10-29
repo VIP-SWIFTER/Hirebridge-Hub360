@@ -72,9 +72,23 @@ const fmtDate = (iso: string) =>
   new Date(iso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
 
 function fmtValue(v: unknown): string {
+  if (v == null) return "";
   if (Array.isArray(v)) return v.join(", ");
   if (typeof v === "boolean") return v ? "Yes" : "No";
-  return v == null ? "" : String(v);
+  if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
+}
+
+function loginErrorMessage(e: unknown): string {
+  if (e instanceof AdminError && e.status === 401) return "That admin key is not correct.";
+  if (e instanceof Error) return e.message;
+  return "Login failed.";
+}
+
+function welcomeText(summary: Summary | null, totalNew: number): string {
+  if (!summary) return "Loading your dashboard...";
+  if (totalNew === 0) return "You are all caught up. No new submissions right now.";
+  return `You have ${totalNew} new submission${totalNew === 1 ? "" : "s"} waiting for a reply.`;
 }
 
 const initials = (name: string) =>
@@ -91,7 +105,7 @@ const ease = [0.22, 1, 0.36, 1] as const;
 const mono = { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" };
 
 // ---------------------------------------------------------------- one submission
-function RowEditor({ type, row, adminKey, onSaved }: { type: FormKey; row: Row; adminKey: string; onSaved: (r: Row) => void }) {
+function RowEditor({ type, row, adminKey, onSaved }: Readonly<{ type: FormKey; row: Row; adminKey: string; onSaved: (r: Row) => void }>) {
   const [status, setStatus] = useState<Status>(row.status);
   const [note, setNote] = useState(row.note ?? "");
   const [saving, setSaving] = useState(false);
@@ -131,7 +145,7 @@ function RowEditor({ type, row, adminKey, onSaved }: { type: FormKey; row: Row; 
           Save
         </Button>
         {msg && (
-          <Typography sx={{ fontSize: "0.88rem", fontWeight: 600, color: msg.ok ? "success.main" : "error.main" }} role="status">
+          <Typography component="output" sx={{ fontSize: "0.88rem", fontWeight: 600, color: msg.ok ? "success.main" : "error.main" }}>
             {msg.text}
           </Typography>
         )}
@@ -154,7 +168,7 @@ function RowEditor({ type, row, adminKey, onSaved }: { type: FormKey; row: Row; 
   );
 }
 
-function RowItem({ type, row, adminKey, onSaved, index }: { type: FormKey; row: Row; adminKey: string; onSaved: (r: Row) => void; index: number }) {
+function RowItem({ type, row, adminKey, onSaved, index }: Readonly<{ type: FormKey; row: Row; adminKey: string; onSaved: (r: Row) => void; index: number }>) {
   const fields = FORM_CONFIGS[type].fields.filter((f) => f.kind !== "consent" || row[f.name] !== undefined);
   const tone = STATUS_COLOR[row.status] ?? "primary";
   return (
@@ -216,7 +230,7 @@ function RowItem({ type, row, adminKey, onSaved, index }: { type: FormKey; row: 
 }
 
 // ---------------------------------------------------------------- page
-function Shell({ children, onLogout }: { children: ReactNode; onLogout?: () => void }) {
+function Shell({ children, onLogout }: Readonly<{ children: ReactNode; onLogout?: () => void }>) {
   return (
     <Box sx={{ minHeight: "100vh", position: "relative", pb: 8 }}>
       <AdminBackground />
@@ -257,6 +271,159 @@ function Shell({ children, onLogout }: { children: ReactNode; onLogout?: () => v
       <Container maxWidth="lg" sx={{ position: "relative", zIndex: 1 }}>
         {children}
       </Container>
+    </Box>
+  );
+}
+
+// ---------------------------------------------------------------- login screen
+interface LoginProps {
+  input: string;
+  onInput: (v: string) => void;
+  showKey: boolean;
+  onToggleKey: () => void;
+  busy: boolean;
+  loginError: string;
+  onSubmit: (e: FormEvent) => void;
+}
+
+function LoginScreen({ input, onInput, showKey, onToggleKey, busy, loginError, onSubmit }: Readonly<LoginProps>) {
+  return (
+    <Box sx={{ minHeight: "100vh", display: "grid", placeItems: "center", p: 2, position: "relative" }}>
+      <AdminBackground />
+      <Box sx={{ position: "absolute", top: 16, right: 16, zIndex: 2 }}>
+        <ThemeToggle />
+      </Box>
+      <motion.div initial={{ opacity: 0, y: 28, scale: 0.94 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.65, ease }} style={{ position: "relative", zIndex: 1, width: "min(100%, 420px)" }}>
+        {/* rotating gradient ring around the card */}
+        <Box sx={(t) => ({ position: "relative", borderRadius: "26px", p: "1.5px", overflow: "hidden", boxShadow: isDark(t) ? "0 30px 80px -30px rgba(255,200,30,.28)" : "0 30px 70px -30px rgba(15,23,42,.35)" })}>
+          <Box aria-hidden sx={{ position: "absolute", inset: "-60%", background: "conic-gradient(from 0deg, transparent 0 55%, #FFC81E, #E4202D, transparent 95%)", animation: "hbSpin 5s linear infinite" }} />
+          <Paper
+            component="form"
+            onSubmit={onSubmit}
+            sx={(t) => ({ position: "relative", p: { xs: 3, sm: 4 }, borderRadius: "25px", backgroundImage: "none", bgcolor: isDark(t) ? "#0d0d0f" : "#FFFFFF", textAlign: "center" })}
+          >
+            <Box sx={{ position: "relative", width: 92, height: 92, mx: "auto", mb: 2 }}>
+              <Box aria-hidden sx={{ position: "absolute", inset: 0, borderRadius: "50%", border: "1.5px dashed rgba(255,200,30,.7)", animation: "hbSpin 14s linear infinite" }} />
+              <Box component="img" src="/emblem.png" alt="" sx={{ position: "absolute", inset: 14, width: 64, height: 64, objectFit: "contain", filter: "drop-shadow(0 0 14px rgba(255,200,30,.55))", animation: "hbFloat 4s ease-in-out infinite" }} />
+            </Box>
+            <Typography variant="h5" component="h1" sx={{ mb: 0.5 }}>
+              Admin dashboard
+            </Typography>
+            <Typography color="text.secondary" sx={{ mb: 3, fontSize: "0.95rem" }}>
+              Enter your admin key to view enquiries, applications and registrations.
+            </Typography>
+            {loginError && (
+              <motion.div key={loginError} initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: [-12, 9, -7, 4, 0] }} transition={{ duration: 0.45 }}>
+                <Alert severity="error" variant="outlined" sx={{ mb: 2, textAlign: "left", borderRadius: "12px" }}>
+                  {loginError}
+                </Alert>
+              </motion.div>
+            )}
+            <TextField
+              fullWidth
+              autoFocus
+              type={showKey ? "text" : "password"}
+              label="Admin key"
+              value={input}
+              onChange={(e) => onInput(e.target.value)}
+              autoComplete="current-password"
+              InputProps={{
+                startAdornment: (<InputAdornment position="start"><LockRounded fontSize="small" /></InputAdornment>),
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <Tooltip title={showKey ? "Hide admin key" : "Show admin key"}>
+                      <IconButton
+                        edge="end"
+                        size="small"
+                        aria-label={showKey ? "Hide admin key" : "Show admin key"}
+                        aria-pressed={showKey}
+                        onClick={onToggleKey}
+                        onMouseDown={(e) => e.preventDefault()}
+                      >
+                        {showKey ? <VisibilityOffRounded fontSize="small" /> : <VisibilityRounded fontSize="small" />}
+                      </IconButton>
+                    </Tooltip>
+                  </InputAdornment>
+                ),
+              }}
+              sx={{ mb: 2.5, "& .MuiOutlinedInput-root.Mui-focused": { boxShadow: "0 0 0 4px rgba(255,200,30,.2)" } }}
+            />
+            <Button type="submit" fullWidth variant="contained" size="large" sx={shine} disabled={busy || !input.trim()} startIcon={busy ? <CircularProgress size={18} color="inherit" /> : undefined}>
+              {busy ? "Checking..." : "Unlock"}
+            </Button>
+            <Button href="#home" color="inherit" size="small" sx={{ mt: 2, color: "text.secondary" }}>
+              Back to website
+            </Button>
+          </Paper>
+        </Box>
+      </motion.div>
+    </Box>
+
+  );
+}
+
+// ---------------------------------------------------------------- stat cards
+function StatCards({ summary, type, onPick }: Readonly<{ summary: Summary | null; type: FormKey; onPick: (k: FormKey) => void }>) {
+  return (
+    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, 1fr)", md: "repeat(4, 1fr)" }, gap: 2, mb: 3.5 }}>
+      {FORM_KEYS.map((k, i) => {
+        const s = summary?.[k];
+        const on = k === type;
+        return (
+          <motion.div key={k} initial={{ opacity: 0, y: 22 }} animate={{ opacity: 1, y: 0 }} whileHover={{ y: -4 }} transition={{ duration: 0.5, ease, delay: 0.12 + i * 0.08 }}>
+            <Card sx={(t) => ({ ...glass(t), position: "relative", overflow: "hidden", borderRadius: "18px", borderColor: on ? accentBorder(t) : undefined, boxShadow: on ? accentGlow(t) : glass(t).boxShadow, transition: "border-color .25s ease, box-shadow .25s ease" })}>
+              <CardActionArea onClick={() => onPick(k)} sx={{ p: 2.25 }} aria-pressed={on}>
+                <Typography sx={{ fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: on ? "primary.dark" : "text.secondary" }}>
+                  {FORM_CONFIGS[k].tab}
+                </Typography>
+                <Typography sx={{ fontSize: "2.3rem", fontWeight: 800, lineHeight: 1.15, fontVariantNumeric: "tabular-nums" }}>{s ? <CountUp value={s.total} /> : "–"}</Typography>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.9, minHeight: 22 }}>
+                  {s && s.new > 0 && <Box aria-hidden sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: "secondary.main", animation: "hbBeacon 1.6s ease-in-out infinite" }} />}
+                  <Typography sx={{ fontSize: "0.85rem", color: s && s.new > 0 ? "secondary.main" : "text.secondary", fontWeight: 700 }}>{s ? `${s.new} new` : " "}</Typography>
+                </Box>
+              </CardActionArea>
+              {on && <Box component={motion.div} layoutId="adminStatBar" transition={{ type: "spring", stiffness: 380, damping: 32 }} sx={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 3, background: "linear-gradient(90deg,#FFC81E,#E4202D)" }} />}
+            </Card>
+          </motion.div>
+        );
+      })}
+    </Box>
+  );
+}
+
+// ---------------------------------------------------------------- results
+interface ResultListProps {
+  loading: boolean;
+  items: Row[];
+  type: FormKey;
+  filtered: boolean;
+  adminKey: string;
+  onSaved: (r: Row) => void;
+}
+
+function ResultList({ loading, items, type, filtered, adminKey, onSaved }: Readonly<ResultListProps>) {
+  if (loading && items.length === 0) {
+    return (
+      <Box sx={{ display: "grid", gap: 1.5 }}>
+        {[0, 1, 2, 3].map((n) => (
+          <Skeleton key={n} variant="rounded" height={74} animation="wave" sx={{ borderRadius: "16px" }} />
+        ))}
+      </Box>
+    );
+  }
+  if (items.length === 0) {
+    return (
+      <Box sx={(t) => ({ ...glass(t), textAlign: "center", py: 8, borderRadius: "20px", color: "text.secondary" })}>
+        <InboxRounded sx={{ fontSize: 60, opacity: 0.7, animation: "hbFloat 3.5s ease-in-out infinite" }} />
+        <Typography sx={{ mt: 1 }}>No {FORM_CONFIGS[type].tab.toLowerCase()} submissions {filtered ? "match your filters" : "yet"}.</Typography>
+      </Box>
+    );
+  }
+  return (
+    <Box sx={{ display: "grid", gap: 1.5, opacity: loading ? 0.7 : 1, transition: "opacity .2s ease" }}>
+      {items.map((r, i) => (
+        <RowItem key={r._id} index={i} type={type} row={r} adminKey={adminKey} onSaved={onSaved} />
+      ))}
     </Box>
   );
 }
@@ -312,7 +479,7 @@ export default function AdminPage() {
       setAuthed(true);
     } catch (e) {
       saveKey("");
-      setLoginError(e instanceof AdminError && e.status === 401 ? "That admin key is not correct." : e instanceof Error ? e.message : "Login failed.");
+      setLoginError(loginErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -321,7 +488,7 @@ export default function AdminPage() {
   // Auto-login if a key was kept for this browser tab.
   useEffect(() => {
     const k = readKey();
-    if (k) void login(k);
+    if (k) login(k).catch(() => undefined);
   }, [login]);
 
   // Load the list whenever tab / filters change (search is debounced).
@@ -373,81 +540,19 @@ export default function AdminPage() {
 
   // ------------------------------------------------------------ login screen
   if (!authed) {
-    const submit = (e: FormEvent) => {
-      e.preventDefault();
-      if (input.trim()) void login(input.trim());
-    };
     return (
-      <Box sx={{ minHeight: "100vh", display: "grid", placeItems: "center", p: 2, position: "relative" }}>
-        <AdminBackground />
-        <Box sx={{ position: "absolute", top: 16, right: 16, zIndex: 2 }}>
-          <ThemeToggle />
-        </Box>
-        <motion.div initial={{ opacity: 0, y: 28, scale: 0.94 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.65, ease }} style={{ position: "relative", zIndex: 1, width: "min(100%, 420px)" }}>
-          {/* rotating gradient ring around the card */}
-          <Box sx={(t) => ({ position: "relative", borderRadius: "26px", p: "1.5px", overflow: "hidden", boxShadow: isDark(t) ? "0 30px 80px -30px rgba(255,200,30,.28)" : "0 30px 70px -30px rgba(15,23,42,.35)" })}>
-            <Box aria-hidden sx={{ position: "absolute", inset: "-60%", background: "conic-gradient(from 0deg, transparent 0 55%, #FFC81E, #E4202D, transparent 95%)", animation: "hbSpin 5s linear infinite" }} />
-            <Paper
-              component="form"
-              onSubmit={submit}
-              sx={(t) => ({ position: "relative", p: { xs: 3, sm: 4 }, borderRadius: "25px", backgroundImage: "none", bgcolor: isDark(t) ? "#0d0d0f" : "#FFFFFF", textAlign: "center" })}
-            >
-              <Box sx={{ position: "relative", width: 92, height: 92, mx: "auto", mb: 2 }}>
-                <Box aria-hidden sx={{ position: "absolute", inset: 0, borderRadius: "50%", border: "1.5px dashed rgba(255,200,30,.7)", animation: "hbSpin 14s linear infinite" }} />
-                <Box component="img" src="/emblem.png" alt="" sx={{ position: "absolute", inset: 14, width: 64, height: 64, objectFit: "contain", filter: "drop-shadow(0 0 14px rgba(255,200,30,.55))", animation: "hbFloat 4s ease-in-out infinite" }} />
-              </Box>
-              <Typography variant="h5" component="h1" sx={{ mb: 0.5 }}>
-                Admin dashboard
-              </Typography>
-              <Typography color="text.secondary" sx={{ mb: 3, fontSize: "0.95rem" }}>
-                Enter your admin key to view enquiries, applications and registrations.
-              </Typography>
-              {loginError && (
-                <motion.div key={loginError} initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: [-12, 9, -7, 4, 0] }} transition={{ duration: 0.45 }}>
-                  <Alert severity="error" variant="outlined" sx={{ mb: 2, textAlign: "left", borderRadius: "12px" }}>
-                    {loginError}
-                  </Alert>
-                </motion.div>
-              )}
-              <TextField
-                fullWidth
-                autoFocus
-                type={showKey ? "text" : "password"}
-                label="Admin key"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                autoComplete="current-password"
-                InputProps={{
-                  startAdornment: (<InputAdornment position="start"><LockRounded fontSize="small" /></InputAdornment>),
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <Tooltip title={showKey ? "Hide admin key" : "Show admin key"}>
-                        <IconButton
-                          edge="end"
-                          size="small"
-                          aria-label={showKey ? "Hide admin key" : "Show admin key"}
-                          aria-pressed={showKey}
-                          onClick={() => setShowKey((v) => !v)}
-                          onMouseDown={(e) => e.preventDefault()}
-                        >
-                          {showKey ? <VisibilityOffRounded fontSize="small" /> : <VisibilityRounded fontSize="small" />}
-                        </IconButton>
-                      </Tooltip>
-                    </InputAdornment>
-                  ),
-                }}
-                sx={{ mb: 2.5, "& .MuiOutlinedInput-root.Mui-focused": { boxShadow: "0 0 0 4px rgba(255,200,30,.2)" } }}
-              />
-              <Button type="submit" fullWidth variant="contained" size="large" sx={shine} disabled={busy || !input.trim()} startIcon={busy ? <CircularProgress size={18} color="inherit" /> : undefined}>
-                {busy ? "Checking..." : "Unlock"}
-              </Button>
-              <Button href="#home" color="inherit" size="small" sx={{ mt: 2, color: "text.secondary" }}>
-                Back to website
-              </Button>
-            </Paper>
-          </Box>
-        </motion.div>
-      </Box>
+      <LoginScreen
+        input={input}
+        onInput={setInput}
+        showKey={showKey}
+        onToggleKey={() => setShowKey((v) => !v)}
+        busy={busy}
+        loginError={loginError}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (input.trim()) login(input.trim()).catch(() => undefined);
+        }}
+      />
     );
   }
 
@@ -461,33 +566,11 @@ export default function AdminPage() {
           Welcome back <Box component="span" sx={{ display: "inline-block", transformOrigin: "70% 70%", animation: "hbWave 3.2s ease-in-out 1" }}>👋</Box>
         </Typography>
         <Typography sx={{ color: "text.secondary", mb: 3 }}>
-          {summary ? (totalNew > 0 ? `You have ${totalNew} new submission${totalNew === 1 ? "" : "s"} waiting for a reply.` : "You are all caught up. No new submissions right now.") : "Loading your dashboard..."}
+          {welcomeText(summary, totalNew)}
         </Typography>
       </motion.div>
 
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, 1fr)", md: "repeat(4, 1fr)" }, gap: 2, mb: 3.5 }}>
-        {FORM_KEYS.map((k, i) => {
-          const s = summary?.[k];
-          const on = k === type;
-          return (
-            <motion.div key={k} initial={{ opacity: 0, y: 22 }} animate={{ opacity: 1, y: 0 }} whileHover={{ y: -4 }} transition={{ duration: 0.5, ease, delay: 0.12 + i * 0.08 }}>
-              <Card sx={(t) => ({ ...glass(t), position: "relative", overflow: "hidden", borderRadius: "18px", borderColor: on ? accentBorder(t) : undefined, boxShadow: on ? accentGlow(t) : glass(t).boxShadow, transition: "border-color .25s ease, box-shadow .25s ease" })}>
-                <CardActionArea onClick={() => setType(k)} sx={{ p: 2.25 }} aria-pressed={on}>
-                  <Typography sx={{ fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: on ? "primary.dark" : "text.secondary" }}>
-                    {FORM_CONFIGS[k].tab}
-                  </Typography>
-                  <Typography sx={{ fontSize: "2.3rem", fontWeight: 800, lineHeight: 1.15, fontVariantNumeric: "tabular-nums" }}>{s ? <CountUp value={s.total} /> : "–"}</Typography>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.9, minHeight: 22 }}>
-                    {s && s.new > 0 && <Box aria-hidden sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: "secondary.main", animation: "hbBeacon 1.6s ease-in-out infinite" }} />}
-                    <Typography sx={{ fontSize: "0.85rem", color: s && s.new > 0 ? "secondary.main" : "text.secondary", fontWeight: 700 }}>{s ? `${s.new} new` : " "}</Typography>
-                  </Box>
-                </CardActionArea>
-                {on && <Box component={motion.div} layoutId="adminStatBar" transition={{ type: "spring", stiffness: 380, damping: 32 }} sx={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 3, background: "linear-gradient(90deg,#FFC81E,#E4202D)" }} />}
-              </Card>
-            </motion.div>
-          );
-        })}
-      </Box>
+      <StatCards summary={summary} type={type} onPick={setType} />
 
       <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease, delay: 0.45 }}>
         <Box sx={(t) => ({ ...glass(t), display: "flex", flexWrap: "wrap", gap: 1.5, alignItems: "center", p: 1.5, borderRadius: "18px", mb: 2.5 })}>
@@ -533,24 +616,14 @@ export default function AdminPage() {
 
       {loading && items.length > 0 && <LinearProgress sx={{ mb: 1.5, borderRadius: 2, height: 3 }} />}
 
-      {loading && items.length === 0 ? (
-        <Box sx={{ display: "grid", gap: 1.5 }}>
-          {[0, 1, 2, 3].map((n) => (
-            <Skeleton key={n} variant="rounded" height={74} animation="wave" sx={{ borderRadius: "16px" }} />
-          ))}
-        </Box>
-      ) : items.length === 0 ? (
-        <Box sx={(t) => ({ ...glass(t), textAlign: "center", py: 8, borderRadius: "20px", color: "text.secondary" })}>
-          <InboxRounded sx={{ fontSize: 60, opacity: 0.7, animation: "hbFloat 3.5s ease-in-out infinite" }} />
-          <Typography sx={{ mt: 1 }}>No {FORM_CONFIGS[type].tab.toLowerCase()} submissions {q || status ? "match your filters" : "yet"}.</Typography>
-        </Box>
-      ) : (
-        <Box sx={{ display: "grid", gap: 1.5, opacity: loading ? 0.7 : 1, transition: "opacity .2s ease" }}>
-          {items.map((r, i) => (
-            <RowItem key={r._id} index={i} type={type} row={r} adminKey={adminKey} onSaved={onSaved} />
-          ))}
-        </Box>
-      )}
+      <ResultList
+        loading={loading}
+        items={items}
+        type={type}
+        filtered={Boolean(q || status)}
+        adminKey={adminKey}
+        onSaved={onSaved}
+      />
     </Shell>
   );
 }

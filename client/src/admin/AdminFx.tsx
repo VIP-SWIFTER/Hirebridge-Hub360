@@ -105,7 +105,7 @@ export function AdminBackground() {
 }
 
 /** Number that counts up smoothly to its value (and between updates). */
-export function CountUp({ value }: { value: number }) {
+export function CountUp({ value }: Readonly<{ value: number }>) {
   const reduce = useReducedMotion();
   const [n, setN] = useState(reduce ? value : 0);
   const from = useRef(reduce ? value : 0);

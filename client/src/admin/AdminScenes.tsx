@@ -31,7 +31,7 @@ const pulseSoft = keyframes`
 const svgBox = { transformBox: "fill-box", transformOrigin: "center" } as const;
 
 /** A faint static line with a light pulse travelling along it. */
-function Trace({ d, color, dur = 3.4, delay = 0, width = 2.2, base = 0.16 }: { d: string; color: string; dur?: number; delay?: number; width?: number; base?: number }) {
+function Trace({ d, color, dur = 3.4, delay = 0, width = 2.2, base = 0.16 }: Readonly<{ d: string; color: string; dur?: number; delay?: number; width?: number; base?: number }>) {
   return (
     <>
       <path d={d} fill="none" stroke={color} strokeOpacity={base} strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round" />
@@ -109,9 +109,12 @@ const bootFlash = keyframes`
   100% { opacity: 0; }
 `;
 
+/** "M120 40 ..." -> the first x / y of an SVG path */
+const START_POINT = /^M(\d+) (\d+)/;
+
 function Robot() {
   return (
-    <Box component="svg" viewBox="0 0 200 270" role="presentation" sx={{ width: "100%", height: "auto", overflow: "visible" }}>
+    <Box component="svg" viewBox="0 0 200 270" aria-hidden="true" sx={{ width: "100%", height: "auto", overflow: "visible" }}>
       <defs>
         <radialGradient id="rbEye" cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="#fff6cc" />
@@ -203,7 +206,7 @@ function Robot() {
 
 function MiniCar() {
   return (
-    <Box component="svg" viewBox="0 0 150 56" role="presentation" sx={{ width: "100%", height: "auto", overflow: "visible", display: "block" }}>
+    <Box component="svg" viewBox="0 0 150 56" aria-hidden="true" sx={{ width: "100%", height: "auto", overflow: "visible", display: "block" }}>
       <defs>
         <linearGradient id="carBody" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#ffd84d" />
@@ -278,12 +281,15 @@ function RoboticScene() {
     <>
       {/* circuit traces with data pulses */}
       <Box component="svg" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice" sx={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0.9 }}>
-        {traces.map((t, i) => (
-          <g key={i}>
-            <Trace {...t} />
-            <circle cx={t.d.match(/^M(\d+) (\d+)/)?.[1]} cy={t.d.match(/^M(\d+) (\d+)/)?.[2]} r="3.5" fill={t.color} fillOpacity=".45" />
-          </g>
-        ))}
+        {traces.map((t) => {
+          const start = START_POINT.exec(t.d);
+          return (
+            <g key={t.d}>
+              <Trace {...t} />
+              <circle cx={start?.[1]} cy={start?.[2]} r="3.5" fill={t.color} fillOpacity=".45" />
+            </g>
+          );
+        })}
       </Box>
 
       {/* robot assistant */}
@@ -312,7 +318,7 @@ function RoboticScene() {
 }
 
 /** One-time "system online" sweep, shown when the admin switches INTO dark mode. */
-function BootSequence({ runId }: { runId: number }) {
+function BootSequence({ runId }: Readonly<{ runId: number }>) {
   if (!runId) return null;
   return (
     <Box key={runId} aria-hidden sx={{ position: "fixed", inset: 0, zIndex: 1600, pointerEvents: "none", overflow: "hidden" }}>
@@ -365,7 +371,7 @@ const CANDIDATES = [
   { x: 700, y: 330 },
 ];
 
-function Person({ x, y, color }: { x: number; y: number; color: string }) {
+function Person({ x, y, color }: Readonly<{ x: number; y: number; color: string }>) {
   return (
     <g>
       <circle cx={x} cy={y} r="19" fill="#fff" stroke={color} strokeOpacity=".7" strokeWidth="1.5" />
@@ -375,7 +381,7 @@ function Person({ x, y, color }: { x: number; y: number; color: string }) {
   );
 }
 
-function ProfileCard({ x, y, rot, delay }: { x: number; y: number; rot: number; delay: number }) {
+function ProfileCard({ x, y, rot, delay }: Readonly<{ x: number; y: number; rot: number; delay: number }>) {
   return (
     <g transform={`translate(${x} ${y})`}>
       <Box component="g" sx={{ ["--r" as string]: `${rot}deg`, ...svgBox, animation: `${floatCard} 7s ease-in-out ${delay}s infinite` }}>
@@ -398,7 +404,7 @@ function ProfileCard({ x, y, rot, delay }: { x: number; y: number; rot: number; 
 function HiringScene() {
   const stages = ["APPLY", "SCREEN", "INTERVIEW", "HIRED"];
   return (
-    <Box component="svg" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice" role="presentation" sx={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0.85 }}>
+    <Box component="svg" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice" aria-hidden="true" sx={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0.85 }}>
       <defs>
         <radialGradient id="hubGlow" cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="#FFC81E" stopOpacity=".55" />
@@ -409,10 +415,10 @@ function HiringScene() {
       {/* candidate network → hub */}
       <circle cx={HUB.x} cy={HUB.y} r="170" fill="url(#hubGlow)" />
       {CANDIDATES.map((c, i) => (
-        <Trace key={i} d={`M${c.x} ${c.y} L${HUB.x} ${HUB.y}`} color={i % 2 ? "#E4202D" : "#D08A00"} dur={3.2 + (i % 3) * 0.6} delay={i * 0.45} base={0.22} width={2.6} />
+        <Trace key={`${c.x}-${c.y}`} d={`M${c.x} ${c.y} L${HUB.x} ${HUB.y}`} color={i % 2 ? "#E4202D" : "#D08A00"} dur={3.2 + (i % 3) * 0.6} delay={i * 0.45} base={0.22} width={2.6} />
       ))}
       {CANDIDATES.map((c, i) => (
-        <Box component="g" key={i} sx={{ animation: `${nodeBlink} ${3 + i * 0.4}s ease-in-out infinite` }}>
+        <Box component="g" key={`${c.x}-${c.y}`} sx={{ animation: `${nodeBlink} ${3 + i * 0.4}s ease-in-out infinite` }}>
           <Person x={c.x} y={c.y} color={i % 2 ? "#C8202D" : "#B87500"} />
         </Box>
       ))}

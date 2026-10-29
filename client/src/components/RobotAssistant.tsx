@@ -6,7 +6,7 @@ import type { OpenForm } from "../types";
 import { useReady } from "../lib/ready";
 
 // Little animated robot assistant (bottom-left): floats, blinks, its antenna pulses, and it waves hello.
-export default function RobotAssistant({ openForm }: { openForm: OpenForm }) {
+export default function RobotAssistant({ openForm }: Readonly<{ openForm: OpenForm }>) {
   const ready = useReady();
   const [open, setOpen] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -32,7 +32,7 @@ export default function RobotAssistant({ openForm }: { openForm: OpenForm }) {
   if (!ready) return null;
 
   return (
-    <Box sx={{ position: "fixed", left: { xs: 12, sm: 20 }, bottom: { xs: 64, sm: 76 }, zIndex: 1190, display: "flex", alignItems: "flex-end", gap: 1 }}>
+    <Box sx={{ position: "fixed", left: { xs: 10, sm: 20 }, bottom: { xs: 58, sm: 76 }, maxWidth: "calc(100vw - 80px)", zIndex: 1190, display: "flex", alignItems: "flex-end", gap: 1 }}>
       <motion.button
         type="button"
         aria-label="Chat with our assistant"
@@ -43,7 +43,7 @@ export default function RobotAssistant({ openForm }: { openForm: OpenForm }) {
         whileHover={{ scale: 1.08 }}
         style={{ all: "unset", cursor: "pointer", display: "block", animation: "hbFloat 4s ease-in-out infinite" }}
       >
-        <svg width="74" height="86" viewBox="0 0 74 86" role="img" aria-hidden>
+        <svg style={{ width: "clamp(56px, 16vw, 74px)", height: "auto" }} viewBox="0 0 74 86" aria-hidden="true">
           <ellipse cx="37" cy="82" rx="20" ry="3.5" fill="rgba(0,0,0,.18)" />
           {/* antenna */}
           <line x1="37" y1="10" x2="37" y2="20" stroke="#6B7280" strokeWidth="2.5" strokeLinecap="round" />

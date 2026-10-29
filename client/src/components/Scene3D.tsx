@@ -28,6 +28,90 @@ function pathX(p: number): number {
   return PATH[PATH.length - 1][1];
 }
 
+function pickParticleColor(cY: THREE.Color, cR: THREE.Color, cW: THREE.Color): THREE.Color {
+  if (Math.random() < 0.5) return cY;
+  return Math.random() < 0.6 ? cR : cW;
+}
+
+function lowOpacityFor(narrow: boolean, dark: boolean): number {
+  if (narrow) return dark ? 0.3 : 0.22;
+  return dark ? 0.5 : 0.3;
+}
+
+function disposeObject(o: THREE.Object3D) {
+  const m = o as THREE.Mesh;
+  m.geometry?.dispose?.();
+  const mat = m.material as THREE.Material | THREE.Material[] | undefined;
+  if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
+  else mat?.dispose?.();
+}
+
+/** Particles: white ones turn to ink on the light page so they stay visible. */
+function recolorParticles(attr: THREE.BufferAttribute, base: Float32Array, dark: boolean) {
+  const ink = new THREE.Color(0x14161a);
+  for (let i = 0; i < base.length / 3; i++) {
+    const r = base[i * 3], g = base[i * 3 + 1], b = base[i * 3 + 2];
+    const white = r > 0.95 && g > 0.95 && b > 0.95;
+    if (white && !dark) attr.setXYZ(i, ink.r, ink.g, ink.b);
+    else attr.setXYZ(i, r, g, b);
+  }
+  attr.needsUpdate = true;
+}
+
+interface Stand {
+  x: number;
+  y: number;
+  s: number;
+  /** 0 = free-roaming along the page, 1 = standing inside the hero HUD frame */
+  b: number;
+}
+
+/** Where the robot stands. In the hero it sits inside the HUD frame (#hero-stage) on every screen size,
+ *  so that area is never empty; further down it glides along its own path. */
+function standPosition(camera: THREE.PerspectiveCamera, base: Stand): Stand {
+  const stage = document.getElementById("hero-stage");
+  if (!stage) return base;
+  const r = stage.getBoundingClientRect();
+  const w = window.innerWidth, h = window.innerHeight;
+  const visH = 2 * camera.position.z * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  const visW = visH * camera.aspect;
+  const ax = ((r.left + r.width / 2) / w - 0.5) * visW;
+  const as = Math.max(0.3, Math.min(1.1, (r.width / h) * visH * 0.22));
+  const ay = -((r.top + r.height / 2) / h - 0.5) * visH + 0.2 * as;
+  let b = Math.max(0, Math.min(1, (r.bottom - 0.12 * h) / (0.4 * h)));
+  b = b * b * (3 - 2 * b);
+  return { x: lerp(base.x, ax, b), y: lerp(base.y, ay, b), s: lerp(base.s, as, b), b };
+}
+
+interface Blink {
+  next: number;
+  t: number;
+}
+
+/** Eyes blink now and then. */
+function updateBlink(bl: Blink, eyes: THREE.Group, t: number, dt: number) {
+  if (t > bl.next && bl.t < 0) bl.t = 0;
+  if (bl.t < 0) return;
+  bl.t += dt;
+  const k = bl.t / 0.16;
+  const s = k < 0.5 ? 1 - k * 2 * 0.92 : (k - 0.5) * 2 * 0.92 + 0.08;
+  eyes.scale.y = Math.max(0.08, Math.min(1, s));
+  if (k >= 1) {
+    eyes.scale.y = 1;
+    bl.t = -1;
+    bl.next = t + 2.5 + Math.random() * 3;
+  }
+}
+
+function orbitChips(chips: THREE.Mesh[], t: number) {
+  chips.forEach((c) => {
+    const d = c.userData as { a: number; r: number; s: number; y: number };
+    const a = d.a + t * d.s;
+    c.position.set(Math.cos(a) * d.r, d.y * 0.45 + Math.sin(t * d.s * 2 + d.a) * 0.18, Math.sin(a) * d.r);
+    c.rotation.set(t * d.s, a, 0);
+  });
+}
+
 export default function Scene3D() {
   const mount = useRef<HTMLDivElement>(null);
 
@@ -155,7 +239,7 @@ export default function Scene3D() {
     const chips: THREE.Mesh[] = [];
     const chipGeo = new RoundedBoxGeometry(0.34, 0.2, 0.05, 2, 0.02);
     for (let i = 0; i < 12; i++) {
-      const m = new THREE.Mesh(chipGeo, i % 3 === 0 ? yellowMetal : i % 3 === 1 ? trimMat : redGlow);
+      const m = new THREE.Mesh(chipGeo, [yellowMetal, trimMat, redGlow][i % 3]);
       m.userData = { a: (i / 12) * Math.PI * 2, r: 3.3 + (i % 3) * 0.3, s: 0.22 + (i % 5) * 0.05, y: (i % 5) - 2 };
       chips.push(m);
       holo.add(m);
@@ -172,7 +256,7 @@ export default function Scene3D() {
       pos[i * 3] = (Math.random() - 0.5) * 30;
       pos[i * 3 + 1] = (Math.random() - 0.5) * 18;
       pos[i * 3 + 2] = (Math.random() - 0.5) * 16 - 2;
-      const c = Math.random() < 0.5 ? cY : Math.random() < 0.6 ? cR : cW;
+      const c = pickParticleColor(cY, cR, cW);
       col.set([c.r, c.g, c.b], i * 3);
     }
     const pGeo = new THREE.BufferGeometry();
@@ -185,16 +269,9 @@ export default function Scene3D() {
     // --- light / dark mode: recolour the pieces that only read well on one background
     let dark = false;
     const colAttr = pGeo.getAttribute("color") as THREE.BufferAttribute;
-    const inkParticle = new THREE.Color(0x14161a);
     const applyMode = (d: boolean) => {
       dark = d;
-      for (let i = 0; i < N; i++) {
-        const r = col[i * 3], g = col[i * 3 + 1], b = col[i * 3 + 2];
-        const white = r > 0.95 && g > 0.95 && b > 0.95;
-        if (white && !d) colAttr.setXYZ(i, inkParticle.r, inkParticle.g, inkParticle.b);
-        else colAttr.setXYZ(i, r, g, b);
-      }
-      colAttr.needsUpdate = true;
+      recolorParticles(colAttr, col, d);
       ptsMat.opacity = d ? 0.8 : 0.55;
       ringBMat.color.setHex(d ? 0xffffff : 0x14161a);
       ringBMat.opacity = d ? 0.3 : 0.22;
@@ -229,7 +306,8 @@ export default function Scene3D() {
     // --- loop
     let raf = 0;
     let visible = true;
-    let scrollSmooth = 0, lastScrollY = window.scrollY, kick = 0, opacity = 1, nextBlink = 2.5, blinkT = -1;
+    let scrollSmooth = 0, lastScrollY = window.scrollY, kick = 0, opacity = 1;
+    const blink: Blink = { next: 2.5, t: -1 };
     const clock = new THREE.Clock();
     const tmp = new THREE.Color();
 
@@ -254,14 +332,14 @@ export default function Scene3D() {
       mouse.sx += (mouse.x - mouse.sx) * 0.07;
       mouse.sy += (mouse.y - mouse.sy) * 0.07;
 
-      // position: glides side to side per section; centred + smaller on phones
-      const x = narrow ? 0 : pathX(scrollSmooth);
-      const y = narrow ? lerp(1.5, 0.3, Math.min(1, scrollSmooth * 8)) : Math.sin(scrollSmooth * Math.PI * 6) * 0.3;
-      robot.position.set(x, y + Math.sin(t * 1.1) * 0.12 + 0.35, 0);
-      robot.scale.setScalar(narrow ? 0.55 : 0.82);
+      const baseX = narrow ? 0 : pathX(scrollSmooth);
+      const baseY = narrow ? lerp(1.5, 0.3, Math.min(1, scrollSmooth * 8)) : Math.sin(scrollSmooth * Math.PI * 6) * 0.3;
+      const { x, y, s: sc, b } = standPosition(camera, { x: baseX, y: baseY + 0.35, s: narrow ? 0.55 : 0.82, b: 0 });
+      robot.position.set(x, y + Math.sin(t * 1.1) * 0.12, 0);
+      robot.scale.setScalar(sc);
 
       // the robot turns toward the middle of the page and toward the cursor
-      const toCentre = -Math.sign(x || 1) * Math.min(1, Math.abs(x) / 2.6) * 0.5;
+      const toCentre = narrow ? 0 : -Math.sign(x || 1) * Math.min(1, Math.abs(x) / 2.6) * 0.5;
       robot.rotation.y += (toCentre + mouse.sx * 0.35 - robot.rotation.y) * 0.08;
       head.rotation.y += (mouse.sx * 0.45 - head.rotation.y) * 0.1;
       head.rotation.x += (mouse.sy * 0.28 + kick * 0.25 - head.rotation.x) * 0.1;
@@ -270,18 +348,7 @@ export default function Scene3D() {
       // eyes follow the cursor; blink now and then
       eyes.position.x += (mouse.sx * 0.18 - eyes.position.x) * 0.15;
       eyes.position.y += (0.05 - mouse.sy * 0.1 - eyes.position.y) * 0.15;
-      if (t > nextBlink && blinkT < 0) blinkT = 0;
-      if (blinkT >= 0) {
-        blinkT += dt;
-        const k = blinkT / 0.16;
-        const s = k < 0.5 ? 1 - k * 2 * 0.92 : (k - 0.5) * 2 * 0.92 + 0.08;
-        eyes.scale.y = Math.max(0.08, Math.min(1, s));
-        if (k >= 1) {
-          eyes.scale.y = 1;
-          blinkT = -1;
-          nextBlink = t + 2.5 + Math.random() * 3;
-        }
-      }
+      updateBlink(blink, eyes, t, dt);
       eyeMat.emissiveIntensity = 2.2 + Math.sin(t * 3) * 0.4;
 
       // scanner sweeps, beacon pulses, rings and chips orbit
@@ -292,12 +359,7 @@ export default function Scene3D() {
       ringB.rotation.z = -t * 0.2;
       shell.rotation.y = -t * 0.12;
       shell.rotation.x = t * 0.08;
-      chips.forEach((c) => {
-        const d = c.userData as { a: number; r: number; s: number; y: number };
-        const a = d.a + t * d.s;
-        c.position.set(Math.cos(a) * d.r, d.y * 0.45 + Math.sin(t * d.s * 2 + d.a) * 0.18, Math.sin(a) * d.r);
-        c.rotation.set(t * d.s, a, 0);
-      });
+      orbitChips(chips, t);
       points.rotation.y = t * 0.02 + scrollSmooth * 1.2;
       points.position.y = scrollSmooth * 2;
 
@@ -307,7 +369,7 @@ export default function Scene3D() {
       yel.color.copy(tmp);
 
       // fade after the hero so text stays readable
-      const targetOpacity = narrow ? (dark ? 0.3 : 0.22) : scrollSmooth < 0.06 ? 1 : dark ? 0.5 : 0.3;
+      const targetOpacity = lerp(lowOpacityFor(narrow, dark), 1, b);
       opacity += (targetOpacity - opacity) * Math.min(1, dt * 3);
       renderer.domElement.style.opacity = String(opacity);
 
@@ -333,13 +395,7 @@ export default function Scene3D() {
       window.removeEventListener("resize", resize);
       window.removeEventListener("pointermove", onMove);
       document.removeEventListener("visibilitychange", onVis);
-      scene.traverse((o) => {
-        const m = o as THREE.Mesh;
-        m.geometry?.dispose?.();
-        const mat = m.material as THREE.Material | THREE.Material[] | undefined;
-        if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
-        else mat?.dispose?.();
-      });
+      scene.traverse(disposeObject);
       envTex.dispose();
       pmrem.dispose();
       renderer.dispose();

@@ -13,7 +13,7 @@ export default function ThemeToggle() {
       <IconButton
         onClick={toggle}
         aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
-        sx={{ width: 42, height: 42, border: "1px solid var(--hb-line)", bgcolor: "var(--hb-chip)", color: "text.primary", overflow: "hidden", "&:hover": { borderColor: "primary.main" } }}
+        sx={{ width: { xs: 38, sm: 42 }, height: { xs: 38, sm: 42 }, flexShrink: 0, border: "1px solid var(--hb-line)", bgcolor: "var(--hb-chip)", color: "text.primary", overflow: "hidden", "&:hover": { borderColor: "primary.main" } }}
       >
         <AnimatePresence mode="wait" initial={false}>
           <motion.span

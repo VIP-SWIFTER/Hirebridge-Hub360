@@ -28,7 +28,15 @@ const CHIPS = [
   { label: "Merchandise", bottom: "6%", right: "6%", color: C.red, anim: `${bob} 5.8s ease-in-out -1s infinite` },
 ];
 
-export default function Hero({ openForm }: { openForm: OpenForm }) {
+// Corner brackets of the HUD frame around the robot.
+const CORNERS: { id: string; top?: number; bottom?: number; left?: number; right?: number; bt?: number; bb?: number; bl?: number; br?: number }[] = [
+  { id: "tl", top: 0, left: 0, bt: 1, bl: 1 },
+  { id: "tr", top: 0, right: 0, bt: 1, br: 1 },
+  { id: "bl", bottom: 0, left: 0, bb: 1, bl: 1 },
+  { id: "br", bottom: 0, right: 0, bb: 1, br: 1 },
+];
+
+export default function Hero({ openForm }: Readonly<{ openForm: OpenForm }>) {
   const ready = useReady();
   const mx = useMotionValue(0);
   const my = useMotionValue(0);
@@ -54,7 +62,7 @@ export default function Hero({ openForm }: { openForm: OpenForm }) {
       id="home"
       onMouseMove={onMove}
       onMouseLeave={onLeave}
-      sx={{ position: "relative", minHeight: { md: "100svh" }, display: "flex", alignItems: "center", pt: { xs: 14, md: 17 }, pb: { xs: 10, md: 12 }, overflow: "hidden" }}
+      sx={{ position: "relative", minHeight: { md: "100svh" }, display: "flex", alignItems: "center", pt: { xs: 12, sm: 14, md: 17 }, pb: { xs: 8, md: 12 }, overflow: "hidden" }}
     >
       {/* Background layers */}
       <Box aria-hidden sx={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
@@ -89,7 +97,7 @@ export default function Hero({ openForm }: { openForm: OpenForm }) {
       </Box>
 
       <Container maxWidth="lg" sx={{ position: "relative" }}>
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1.1fr 0.9fr" }, gap: { xs: 7, md: 5 }, alignItems: "center" }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0,1fr)", md: "minmax(0,1.1fr) minmax(0,0.9fr)" }, gap: { xs: 5, md: 5 }, alignItems: "center" }}>
           <motion.div variants={container} initial="hidden" animate={ready ? "show" : "hidden"}>
             <motion.div variants={item}>
               <Eyebrow>Creative &amp; Branding Solutions</Eyebrow>
@@ -122,7 +130,7 @@ export default function Hero({ openForm }: { openForm: OpenForm }) {
             </motion.div>
 
             <motion.div variants={item}>
-              <Box sx={{ display: "flex", flexDirection: { xs: "column", sm: "row" }, gap: 1.75, mb: 5 }}>
+              <Box sx={{ display: "flex", flexDirection: { xs: "column", sm: "row" }, alignItems: { xs: "stretch", sm: "center" }, gap: 1.75, mb: { xs: 4, md: 5 }, "& > div": { display: { xs: "block !important", sm: "inline-block !important" } } }}>
                 <Magnetic><Button
                   onClick={() => openForm("marketing")}
                   variant="contained"
@@ -150,7 +158,7 @@ export default function Hero({ openForm }: { openForm: OpenForm }) {
                 <Link href={telLink()} underline="none" color="text.secondary" sx={{ display: "inline-flex", alignItems: "center", gap: 1.2, fontWeight: 600, "&:hover": { color: "primary.dark" } }}>
                   <PhoneRounded sx={{ color: "primary.dark" }} fontSize="small" /> {BRAND.phoneDisplay}
                 </Link>
-                <Link href={`mailto:${BRAND.email}`} underline="none" color="text.secondary" sx={{ display: "inline-flex", alignItems: "center", gap: 1.2, fontWeight: 600, "&:hover": { color: "primary.dark" } }}>
+                <Link href={`mailto:${BRAND.email}`} underline="none" color="text.secondary" sx={{ display: "inline-flex", alignItems: "center", gap: 1.2, fontWeight: 600, wordBreak: "break-all", fontSize: { xs: "0.92rem", sm: "1rem" }, "&:hover": { color: "primary.dark" } }}>
                   <EmailRounded sx={{ color: "primary.dark" }} fontSize="small" /> {BRAND.email}
                 </Link>
               </Box>
@@ -164,13 +172,13 @@ export default function Hero({ openForm }: { openForm: OpenForm }) {
             transition={{ duration: 1, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
             style={{ perspective: 900 }}
           >
-            <Box sx={{ position: "relative", aspectRatio: "1", width: { xs: "min(88%, 420px)", md: "min(100%, 520px)" }, mx: "auto", display: "grid", placeItems: "center" }}>
+            <Box id="hero-stage" sx={{ position: "relative", aspectRatio: "1", width: { xs: "min(92%, 440px)", sm: "min(80%, 480px)", md: "min(100%, clamp(420px, 34vw, 900px))" }, mx: "auto", display: "grid", placeItems: "center" }}>
               {/* The fixed three.js robot shows through here; this HUD frames it. */}
               <Box data-cursor="view" sx={{ position: "absolute", inset: "4%", borderRadius: "50%", border: "1.5px dashed rgba(255,200,30,.45)", animation: `${spin} 40s linear infinite` }} />
               <Box sx={{ position: "absolute", inset: "17%", borderRadius: "50%", border: "1.5px dashed rgba(228,32,45,.5)", animation: `${spin} 28s linear infinite reverse` }} />
               {/* corner brackets */}
-              {[{ top: 0, left: 0, bt: 1, bl: 1 }, { top: 0, right: 0, bt: 1, br: 1 }, { bottom: 0, left: 0, bb: 1, bl: 1 }, { bottom: 0, right: 0, bb: 1, br: 1 }].map((c, i) => (
-                <Box key={i} aria-hidden sx={{ position: "absolute", width: 34, height: 34, top: c.top, bottom: c.bottom, left: c.left, right: c.right, borderStyle: "solid", borderColor: "#FFC81E", borderWidth: 0, borderTopWidth: c.bt ?? 0, borderBottomWidth: c.bb ?? 0, borderLeftWidth: c.bl ?? 0, borderRightWidth: c.br ?? 0, opacity: 0.8 }} />
+              {CORNERS.map((c) => (
+                <Box key={c.id} aria-hidden sx={{ position: "absolute", width: 34, height: 34, top: c.top, bottom: c.bottom, left: c.left, right: c.right, borderStyle: "solid", borderColor: "#FFC81E", borderWidth: 0, borderTopWidth: c.bt ?? 0, borderBottomWidth: c.bb ?? 0, borderLeftWidth: c.bl ?? 0, borderRightWidth: c.br ?? 0, opacity: 0.8 }} />
               ))}
               {/* scan line + readouts */}
               <Box aria-hidden sx={{ position: "absolute", left: "6%", right: "6%", height: 2, background: "linear-gradient(90deg, transparent, #E4202D, transparent)", boxShadow: "0 0 14px rgba(228,32,45,.7)", animation: "hbHudScan 4.5s ease-in-out infinite alternate", opacity: 0.7 }} />

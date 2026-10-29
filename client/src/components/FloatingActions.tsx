@@ -10,16 +10,17 @@ export default function FloatingActions() {
   const showTop = useScrollTrigger({ disableHysteresis: true, threshold: 700 });
 
   return (
-    <Box sx={{ position: "fixed", right: { xs: 14, sm: 20 }, bottom: { xs: 14, sm: 20 }, zIndex: 1200, display: "flex", flexDirection: "column", gap: 1.5, alignItems: "center" }}>
+    <Box sx={{ position: "fixed", right: { xs: "max(12px, env(safe-area-inset-right))", sm: 20 }, bottom: { xs: "max(12px, env(safe-area-inset-bottom))", sm: 20 }, zIndex: 1200, display: "flex", flexDirection: "column", gap: { xs: 1, sm: 1.5 }, alignItems: "center" }}>
       <Zoom in={showTop}>
-        <Fab size="medium" aria-label="Back to top" onClick={() => scrollToTarget(0, 0)} sx={{ bgcolor: "background.paper", color: "text.primary", border: "1px solid var(--hb-line)", "&:hover": { bgcolor: "background.paper", borderColor: "primary.main" } }}>
+        <Fab size="small" aria-label="Back to top" onClick={() => scrollToTarget(0, 0)} sx={{ bgcolor: "background.paper", color: "text.primary", border: "1px solid var(--hb-line)", "&:hover": { bgcolor: "background.paper", borderColor: "primary.main" } }}>
           <KeyboardArrowUpRounded />
         </Fab>
       </Zoom>
-      <Fab color="primary" component="a" href={`tel:+91${BRAND.phone}`} aria-label="Call us">
+      <Fab size="small" color="primary" component="a" href={`tel:+91${BRAND.phone}`} aria-label="Call us">
         <PhoneRounded />
       </Fab>
       <Fab
+        size="small"
         component="a"
         href={`https://wa.me/${BRAND.whatsapp}`}
         target="_blank"

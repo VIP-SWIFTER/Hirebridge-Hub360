@@ -63,7 +63,7 @@ function readSaved(): Mode {
   return "light";
 }
 
-export function ThemeModeProvider({ children }: { children: ReactNode }) {
+export function ThemeModeProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [mode, setMode] = useState<Mode>(readSaved);
   const theme = useMemo(() => makeTheme(mode), [mode]);
 
@@ -78,6 +78,7 @@ export function ThemeModeProvider({ children }: { children: ReactNode }) {
   }, [mode]);
 
   const toggle = useCallback(() => setMode((m) => (m === "light" ? "dark" : "light")), []);
+  const ctxValue = useMemo(() => ({ mode, toggle }), [mode, toggle]);
 
   const globalStyles = useMemo(
     () => ({
@@ -88,8 +89,25 @@ export function ThemeModeProvider({ children }: { children: ReactNode }) {
       "@keyframes hbWave": { "0%,60%,100%": { transform: "rotate(0deg)" }, "70%": { transform: "rotate(-28deg)" }, "80%": { transform: "rotate(8deg)" }, "90%": { transform: "rotate(-24deg)" } },
       "@keyframes hbBlink": { "0%,92%,100%": { transform: "scaleY(1)" }, "96%": { transform: "scaleY(0.1)" } },
       "@keyframes hbHudScan": { from: { top: "0%" }, to: { top: "100%" } },
+      "@keyframes hbPulseBtn": { "0%": { boxShadow: "0 0 0 0 rgba(255,200,30,.6)" }, "70%,100%": { boxShadow: "0 0 0 18px rgba(255,200,30,0)" } },
       "@keyframes hbScan": { from: { top: "-120px" }, to: { top: "100%" } },
-      html: { scrollPaddingTop: "84px", colorScheme: mode },
+      html: {
+        scrollPaddingTop: "84px",
+        colorScheme: mode,
+        maxWidth: "100%",
+        overflowX: "clip",
+        WebkitTextSizeAdjust: "100%",
+        // Large monitors / TVs: scale text up and let the page content grow instead of floating in a narrow column
+        "@media (min-width:1920px)": { fontSize: "112.5%" },
+        "@media (min-width:2560px)": { fontSize: "137.5%" },
+        "@media (min-width:3200px)": { fontSize: "175%" },
+      },
+      ".MuiContainer-root.MuiContainer-maxWidthLg": {
+        "@media (min-width:1536px)": { maxWidth: 1320 },
+        "@media (min-width:1920px)": { maxWidth: 1560 },
+        "@media (min-width:2560px)": { maxWidth: 1960 },
+        "@media (min-width:3200px)": { maxWidth: 2500 },
+      },
       "html:not(.lenis-on)": { scrollBehavior: "smooth" },
       "html.lenis-on, html.lenis-on body": { height: "auto" },
       ".lenis.lenis-smooth": { scrollBehavior: "auto !important" },
@@ -102,7 +120,7 @@ export function ThemeModeProvider({ children }: { children: ReactNode }) {
       ".hb-cursor-ring.hot": { background: "rgba(228,32,45,.28)", borderColor: "#E4202D" },
       ".hb-cursor-ring.view": { background: "rgba(228,32,45,.9)", borderColor: "#E4202D" },
       "@media (hover: none), (pointer: coarse)": { ".hb-cursor-dot, .hb-cursor-ring": { display: "none" } },
-      body: { overflowX: "hidden", WebkitFontSmoothing: "antialiased", transition: "background-color .35s ease, color .35s ease" },
+      body: { overflowX: "clip", maxWidth: "100%", minWidth: 320, WebkitFontSmoothing: "antialiased", transition: "background-color .35s ease, color .35s ease" },
       "img, svg": { display: "block", maxWidth: "100%" },
       "::selection": { background: "#E4202D", color: "#fff" },
       "@media (prefers-reduced-motion: reduce)": {
@@ -118,7 +136,7 @@ export function ThemeModeProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <ThemeModeContext.Provider value={{ mode, toggle }}>
+    <ThemeModeContext.Provider value={ctxValue}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <GlobalStyles styles={globalStyles} />
